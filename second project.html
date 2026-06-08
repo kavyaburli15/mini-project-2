@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Password Manager Vault</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      margin: 20px;
+    }
+    .vault-container {
+      max-width: 600px;
+      margin: auto;
+    }
+    .input-section {
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .input-section input {
+      margin: 5px;
+      padding: 8px;
+      width: 45%;
+    }
+    .input-section button {
+      padding: 8px 12px;
+      margin-top: 10px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .card h3 {
+      margin: 0 0 10px;
+    }
+    .card .password {
+      font-family: monospace;
+      margin-bottom: 10px;
+    }
+    .card button {
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="vault-container">
+    <div class="input-section">
+      <input type="text" id="account" placeholder="Account">
+      <input type="password" id="password" placeholder="Password">
+      <br>
+      <button onclick="addEntry()">Add Entry</button>
+    </div>
+    <div id="cards"></div>
+  </div>
+
+  <script>
+    const vault = {};
+    let cryptoKey;
+
+    // Generate encryption key
+    async function generateKey() {
+      cryptoKey = await window.crypto.subtle.generateKey(
+        { name: "AES-GCM", length: 256 },
+        true,
+        ["encrypt", "decrypt"]
+      );
+    }
+    generateKey();
+
+    async function encrypt(text) {
+      const enc = new TextEncoder();
+      const iv = window.crypto.getRandomValues(new Uint8Array(12));
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        cryptoKey,
+        enc.encode(text)
+      );
+      return { ciphertext: new Uint8Array(ciphertext), iv };
+    }
+
+    async function decrypt(ciphertext, iv) {
+      const dec = new TextDecoder();
+      const plain = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        cryptoKey,
+        ciphertext
+      );
+      return dec.decode(plain);
+    }
+
+    async function addEntry() {
+      const account = document.getElementById("account").value;
+      const password = document.getElementById("password").value;
+      if (!account || !password) return alert("Enter both account and password");
+
+      const encrypted = await encrypt(password);
+      vault[account] = encrypted;
+      document.getElementById("account").value = "";
+      document.getElementById("password").value = "";
+      renderCards();
+    }
+
+    function renderCards() {
+      const cardsDiv = document.getElementById("cards");
+      cardsDiv.innerHTML = "";
+      Object.keys(vault).forEach(account => {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        const title = document.createElement("h3");
+        title.textContent = "Account: " + account;
+        card.appendChild(title);
+
+        const pwLabel = document.createElement("div");
+        pwLabel.className = "password";
+        pwLabel.textContent = "**********";
+        card.appendChild(pwLabel);
+
+        const revealBtn = document.createElement("button");
+        revealBtn.textContent = "Reveal";
+        revealBtn.onclick = async () => {
+          const decrypted = await decrypt(vault[account].ciphertext, vault[account].iv);
+          pwLabel.textContent = decrypted;
+        };
+
+        const hideBtn = document.createElement("button");
+        hideBtn.textContent = "Hide";
+        hideBtn.onclick = () => {
+          pwLabel.textContent = "**********";
+        };
+
+        card.appendChild(revealBtn);
+        card.appendChild(hideBtn);
+        cardsDiv.appendChild(card);
+      });
+    }
+  </script>
+</body>
+</html>
